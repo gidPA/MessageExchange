@@ -1,0 +1,17 @@
+{
+    "name": "MessageExchange",
+    "version": "0.0.4",
+    "description": "A fixed-length, topic-driven custom UART message library",
+    "keywords": "communication, message, UART",
+    "authors":
+    [
+      {
+        "name": "Gideon P. Adityas",
+        "email": "gideon.adityas@gmail.com",
+        "maintainer": true
+      }
+    ],
+    "license": "MIT",
+    "frameworks": "Arduino",
+    "platforms": "*"
+  }
