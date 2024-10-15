@@ -18,11 +18,18 @@ void MessageExchange::setSignature(const char * signature){
     strncpy(objectSignature, signature, 20);
 }
 
-void MessageExchange::createNewMessage(messageTopic topic) {
+void MessageExchange::createNewMessage(MessageTopic topic) {
+    if (topic != ITEM_ENTRY){
+        memset(message, 0, sizeof(message));
+    }
+    else{
+        message[3] = (byte)LoadingType;
+        message[4] = (byte)LoadingSize; 
+    }
+
     message[0] = MESSAGE_START_CODE;
     message[1] = (byte)topic;
-    message[3] = (byte)LoadingType;
-    message[4] = (byte)LoadingSize; 
+
     message[MESSAGE_SIZE - 1] = MESSAGE_END_CODE;
 }
 
@@ -30,7 +37,7 @@ void MessageExchange::createNewMessage(const byte messageSrc[MESSAGE_SIZE]){
     memcpy(message, messageSrc, MESSAGE_SIZE);
 }
 
-void MessageExchange::setItemEntryStatus(itemStatus status) {
+void MessageExchange::setItemEntryStatus(ItemStatus status) {
     message[2] = (byte)status;
 }
 
@@ -39,10 +46,11 @@ void MessageExchange::getRawMessage(byte dest[MESSAGE_SIZE]){
 }
 
 byte MessageExchange::getItemEntryStatus() {
+    Serial.println("Getting Entry Status...");
     return message[2];
 }
 
-void MessageExchange::setItemType(itemType type) {
+void MessageExchange::setItemType(ItemType type) {
     message[3] = (byte)type;
 }
 
@@ -50,7 +58,7 @@ byte MessageExchange::getItemType() {
     return message[3];
 }
 
-void MessageExchange::setItemSize(itemSize size) {
+void MessageExchange::setItemSize(ItemSize size) {
     message[4] = (byte)size;
 }
 
@@ -66,9 +74,39 @@ byte MessageExchange::getItemPoint() {
     return message[5];
 }
 
+void MessageExchange::setMemberModeReadiness(MemberModeReadyStatus status){
+    message[2] = (byte)status;
+}
+
+byte MessageExchange::getMemberModeReadiness(){
+    return message[2];
+};
+
+
+void MessageExchange::setMessageDataDirectly(byte dataByte, byte dataValue){
+    message[dataByte] = dataValue;
+}
+
+byte MessageExchange::getMessageDataDirectly(byte dataByte){
+    return message[dataByte];
+}
+
 bool MessageExchange::checkMessageEntry(){
-    if (uartDevice->available()){
-        return true;
+    int enteredMessageSize = 0;
+    if (uartDevice->available() >= MESSAGE_SIZE){
+        for (int i=0; i < enteredMessageSize; i++){
+            int buffer = uartDevice->peek();
+            if (buffer == MESSAGE_START_CODE){
+                return true;
+            }else{
+                uartDevice->read();
+            }
+            
+            if (i == (enteredMessageSize - 1)){
+                return false;
+            }
+        }
+        return false;
     }
     else {
         return false;
@@ -76,17 +114,17 @@ bool MessageExchange::checkMessageEntry(){
 }
 
 void MessageExchange::previewMessage() {
-    char buffer[50];
-    sprintf(buffer, "[%s Preview] %d %d %d %d %d %d %d %d %d %d", objectSignature,
+    char buffer[100];
+    snprintf(buffer, sizeof(buffer),"[%s Preview] %d %d %d %d %d %d %d %d %d %d", objectSignature,
             message[0], message[1], message[2], message[3], message[4],
             message[5], message[6], message[7], message[8], message[9]);
-
+    
     if (uartMonitoringDevice != nullptr) {
         uartMonitoringDevice->println(buffer);
-        uartMonitoringDevice->println(getMessageTopicName((messageTopic)message[1]));
-        uartMonitoringDevice->println(getItemStatusName((itemStatus)message[2]));
-        uartMonitoringDevice->println(getItemTypeName((itemType)message[3]));
-        uartMonitoringDevice->println(getItemSizeName((itemSize)message[4]));
+        uartMonitoringDevice->println(getMessageTopicName((MessageTopic)message[1]));
+        uartMonitoringDevice->println(getItemStatusName((ItemStatus)message[2]));
+        uartMonitoringDevice->println(getItemTypeName((ItemType)message[3]));
+        uartMonitoringDevice->println(getItemSizeName((ItemSize)message[4]));
     } else {
         Serial.println("UART monitoring device not set.");
     }
@@ -104,64 +142,33 @@ void MessageExchange::sendMessage() {
     }
 }
 
-byte MessageExchange::handleIncomingMessage() {
-    // if (uartDevice != nullptr && uartDevice->available() >= MESSAGE_SIZE) {
-    //     uartDevice->readBytes(message, MESSAGE_SIZE);
-    //     clearSerialBuffer();
-    //     return message[1]; // Return the message topic
-    // } else {
-    //     if (uartMonitoringDevice != nullptr) {
-    //         uartMonitoringDevice->println("UART device not set or not enough data available.");
-    //     } else {
-    //         Serial.println("UART device not set or not enough data available.");
-    //     }
+byte MessageExchange::sendMessageAndWait(){
+    this->sendMessage();
+    long timeoutCount = millis();
 
-    //     clearSerialBuffer();
-    //     return TOPIC_ERR; // Return an error code or handle as needed
-    // }
-
-    if (uartDevice == nullptr){
-        Serial.println("[" + String(objectSignature) + "] UART Device not set");
-        return TOPIC_ERR;
-    }
-
-    uint8_t byteData;
-    int prev = 0;
-    //int counter = 0;
-
-    byte header = uartDevice->peek();
-
-    if (header == MESSAGE_START_CODE)
-    {
-        for(int counter = 0; counter < MESSAGE_SIZE; counter++){
-            message[counter] = uartDevice->read();
-
-            // if (counter == (MESSAGE_SIZE - 1) && message[counter] != MESSAGE_END_CODE){
-            //     return STAT_ERR;
-            // }
+    while(true){
+        if(uartDevice->available() > 0){
+            return this->handleIncomingMessage();
+        } else if((millis() - timeoutCount) == 10000){
+            return 100;
         }
     }
-    else
-    {
-        clearSerialBuffer();
-        return TOPIC_ERR;
+}
+
+byte MessageExchange::handleIncomingMessage() {
+    if (uartDevice != nullptr && uartDevice->available() >= MESSAGE_SIZE) {
+        this->clearMessageBuffer();
+        uartDevice->readBytes(message, MESSAGE_SIZE);
+        this->clearSerialBuffer();
+        return message[1]; // Return the message topic
+    } else {
+        if (uartMonitoringDevice != nullptr) {
+            uartMonitoringDevice->println("UART device not set or not enough data available.");
+        } else {
+            Serial.println("UART device not set or not enough data available.");
+        }
+        return TOPIC_ERR; // Return an error code or handle as needed
     }
-
-    // if (prev > 0)
-    // {
-    //     for (int i = 0; i < 10; i++)
-    //     {
-    //         uartMonitoringDevice->print(message[i]);
-    //         uartMonitoringDevice->print(" ");
-    //         if (message[i] == 254)
-    //         {
-    //             uartMonitoringDevice->println();
-    //             break;
-    //         }
-    //     }
-    // }
-
-    return message[1];
 }
 
 void MessageExchange::clearSerialBuffer() {
@@ -170,7 +177,11 @@ void MessageExchange::clearSerialBuffer() {
     }
 }
 
-const char* MessageExchange::getMessageTopicName(messageTopic topic) {
+void MessageExchange::clearMessageBuffer(){
+    memset(message, 0, sizeof(message));
+}
+
+const char* MessageExchange::getMessageTopicName(MessageTopic topic) {
     switch (topic) {
         case TOPIC_ERR: return "TOPIC_ERR";
         case BEGIN_TRANSACTION: return "BEGIN_TRANSACTION";
@@ -185,32 +196,56 @@ const char* MessageExchange::getMessageTopicName(messageTopic topic) {
     }
 }
 
-const char* MessageExchange::getItemTypeName(itemType type) {
+const char* MessageExchange::getItemTypeName(ItemType type) {
     switch (type) {
         case ITEM_ERR: return "ITEM_ERR";
         case PLASTIC_COLOURED: return "PLASTIC_COLOURED";
         case PLASTIC_TRANSPARENT: return "PLASTIC_TRANSPARENT";
         case METAL: return "METAL";
+        case LoadingType: return "LoadingType";
         default: return "UNKNOWN_ITEM_TYPE";
     }
 }
 
-const char* MessageExchange::getItemSizeName(itemSize size) {
+const char* MessageExchange::getItemSizeName(ItemSize size) {
     switch (size) {
         case SIZE_ERR: return "SIZE_ERR";
         case SMALL: return "SMALL";
         case MEDIUM: return "MEDIUM";
         case LARGE: return "LARGE";
+        case LoadingSize: return "LoadingSize";
         default: return "UNKNOWN_SIZE";
     }
 }
 
-const char* MessageExchange::getItemStatusName(itemStatus status) {
+const char* MessageExchange::getItemStatusName(ItemStatus status) {
     switch (status) {
         case STAT_ERR: return "STAT_ERR";
         case DECLINED: return "DECLINED";
         case ACCEPTED: return "ACCEPTED";
         case STAT_PENDING: return "PENDING";
         default: return "UNKNOWN_STATUS";
+    }
+}
+
+const char* MessageExchange::getTranslatedItemTypeName(ItemType type) {
+    switch (type) {
+        case ITEM_ERR: return "ITEM_ERR";
+        case PLASTIC_COLOURED: return "Berwarna";
+        case PLASTIC_TRANSPARENT: return "Bening";
+        case METAL: return "Logam";
+        case LoadingType: return "Loading...";
+        default: return "UNKNOWN_ITEM_TYPE";
+    }
+}
+
+const char* MessageExchange::getTranslatedItemSizeName(ItemSize size) {
+    switch (size) {
+        case SIZE_ERR: return "SIZE_ERR";
+        case SMALL: return "Kecil";
+        case MEDIUM: return "Sedang";
+        case LARGE: return "Besar";
+        case LoadingSize: return "Loading...";
+        default: return "UNKNOWN_SIZE";
     }
 }

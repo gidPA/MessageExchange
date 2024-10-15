@@ -7,7 +7,7 @@
 #define MESSAGE_START_CODE 252
 #define MESSAGE_END_CODE 254
 
-enum messageTopic {
+enum MessageTopic {
     TOPIC_ERR,
     BEGIN_TRANSACTION,
     ITEM_ENTRY,
@@ -20,7 +20,7 @@ enum messageTopic {
     BIN_EMPTY_AND_COIN
 };
 
-enum itemType {
+enum ItemType {
     ITEM_ERR,
     PLASTIC_COLOURED,
     PLASTIC_TRANSPARENT,
@@ -28,7 +28,7 @@ enum itemType {
     LoadingType
 };
 
-enum itemSize {
+enum ItemSize {
     SIZE_ERR,
     SMALL,
     MEDIUM,
@@ -36,11 +36,19 @@ enum itemSize {
     LoadingSize
 };
 
-enum itemStatus {
+enum ItemStatus {
     STAT_ERR,
     DECLINED,
     ACCEPTED,
     STAT_PENDING
+};
+
+enum MemberModeReadyStatus{
+    MEMBERMODE_ERR = 0,
+    MEMBER_APPROVE = 1,
+    MEMBER_REJECT_BIN = 125,
+    MEMBER_REJECT_COIN = 126,
+    MEMBER_REJECT_BUSY = 127
 };
 
 class MessageExchange {
@@ -60,32 +68,44 @@ public:
     HardwareSerial* getUartDevice();
 
     void setUartMonitoringDevice(HardwareSerial *device);
-    void createNewMessage(messageTopic topic);
+    void createNewMessage(MessageTopic topic);
     void createNewMessage(const byte messageSrc[MESSAGE_SIZE]);
 
     void getRawMessage(byte dest[MESSAGE_SIZE]);
 
-    void setItemEntryStatus(itemStatus status);
+    void setItemEntryStatus(ItemStatus status);
     byte getItemEntryStatus();
 
-    void setItemType(itemType type);
+    void setItemType(ItemType type);
     byte getItemType();
 
-    void setItemSize(itemSize size);
+    void setItemSize(ItemSize size);
     byte getItemSize();
 
     void setItemPoint(byte point);
     byte getItemPoint();
 
+    void setMemberModeReadiness(MemberModeReadyStatus status);
+    byte getMemberModeReadiness();
+
+    void setMessageDataDirectly(byte dataByte, byte dataValue);
+    byte getMessageDataDirectly(byte dataByte);
+
     bool checkMessageEntry();
     void previewMessage();
     void sendMessage();
+    byte sendMessageAndWait();
     byte handleIncomingMessage();
 
-    const char* getMessageTopicName(messageTopic topic);
-    const char* getItemTypeName(itemType type);
-    const char* getItemSizeName(itemSize size);
-    const char* getItemStatusName(itemStatus status);
+    void clearMessageBuffer();
+
+    const char* getMessageTopicName(MessageTopic topic);
+    const char* getItemTypeName(ItemType type);
+    const char* getItemSizeName(ItemSize size);
+    const char* getItemStatusName(ItemStatus status);
+
+    const char* getTranslatedItemTypeName(ItemType type);
+    const char* getTranslatedItemSizeName(ItemSize size);
 };
 
 #endif // MESSAGE_EXCHANGE_H
