@@ -22,8 +22,8 @@ enum MessageTopic {
 
 enum ItemType {
     ITEM_ERR,
-    PLASTIC_COLOURED,
     PLASTIC_TRANSPARENT,
+    PLASTIC_COLOURED,
     METAL,
     LoadingType
 };
